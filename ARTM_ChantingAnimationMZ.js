@@ -6,6 +6,7 @@
 // ===================================================
 // [Version]
 // 1.0.0 初版
+// 1.0.1 一部シーンでスキル速度補正が＋でもアニメーション再生される不具合を修正
 // =================================================================
 /*:ja
  * @target MZ
@@ -99,14 +100,13 @@
     // Sprite_Battler
     //
     Sprite_Battler.prototype.updateChantingAnimation = function(battler) {
-        if (battler.isChanting() &&
-            battler._tpbState !== "acting" &&
-            !battler.animationPlayingCA()) {
-             const id = getCantAnimationId(battler);
-             if (id > 0) {
-                 $gameTemp.requestAnimationCA([battler], id);
-                 battler.startAnimationCA();
-             }
+        if (battler.isChanting() && battler._tpbState !== "acting") {
+            const id = getCantAnimationId(battler);
+            const speed = battler._actions[0].item().speed;
+            if (id > 0 && speed < 0 && !battler.animationPlayingCA()) {
+                $gameTemp.requestAnimationCA([battler], id);
+                battler.startAnimationCA();
+            }
         }
     };
 
@@ -180,7 +180,7 @@
     const _Spriteset_Base_updateAnimations = Spriteset_Base.prototype.updateAnimations;
     Spriteset_Base.prototype.updateAnimations = function() {
         for (const sprite of this._animationSpritesCA) {
-            if (!sprite.isPlaying()) {
+            if (!sprite.isPlaying() || !sprite.targetObjects[0].isChanting()) {
                 this.removeAnimationCA(sprite);
             }
         }
