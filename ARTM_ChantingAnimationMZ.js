@@ -7,6 +7,7 @@
 // [Version]
 // 1.0.0 初版
 // 1.0.1 一部シーンでスキル速度補正が＋でもアニメーション再生される不具合を修正
+// 1.0.2 詠唱アニメーションが一定ターン経過以降に一切発動しなくなる不具合を修正
 // =================================================================
 /*:ja
  * @target MZ
@@ -59,18 +60,10 @@
     //-----------------------------------------------------------------------------
     // Game_Temp
     //
-    const _Game_BattlerBase_initMembers = Game_BattlerBase.prototype.initMembers;
-    Game_BattlerBase.prototype.initMembers = function() {
-        _Game_BattlerBase_initMembers.call(this);
-        this._isUsingCA = false;
-        this._animationPlayingCA = false;
-        this._animationObjectCA = null;
-    };
-
-    Game_Temp.prototype.requestAnimationCA = function(targets, animationId)
+    Game_Temp.prototype.requestAnimationCA = function(target, animationId)
     {
-        targets.forEach(t => t.startAnimationCA());
-        Game_Temp.prototype.requestAnimation.call(this, targets, animationId);
+        target.startAnimationCA();
+        Game_Temp.prototype.requestAnimation.call(this, [target], animationId);
         this._isUsingCA = true;
     };
 
@@ -82,6 +75,16 @@
     Game_Temp.prototype.isUsingCA = function()
     {
         return this._isUsingCA;
+    };
+
+    //-----------------------------------------------------------------------------
+    // Game_BattlerBase
+    //
+    const _Game_BattlerBase_initMembers = Game_BattlerBase.prototype.initMembers;
+    Game_BattlerBase.prototype.initMembers = function() {
+        _Game_BattlerBase_initMembers.call(this);
+        this._isUsingCA = false;
+        this._animationPlayingCA = false;
     };
 
     Game_BattlerBase.prototype.animationPlayingCA = function() {
@@ -104,8 +107,7 @@
             const id = getCantAnimationId(battler);
             const speed = battler._actions[0].item().speed;
             if (id > 0 && speed < 0 && !battler.animationPlayingCA()) {
-                $gameTemp.requestAnimationCA([battler], id);
-                battler.startAnimationCA();
+                $gameTemp.requestAnimationCA(battler, id);
             }
         }
     };
@@ -168,7 +170,6 @@
             sprite.targetObjects = targets;
             sprite.setup(targetSprites, animation, mirror, delay, previous);
             sprite._animation.displayType = -1;
-            target._animationObjectCA = sprite;
             this._effectsContainer.addChild(sprite);
             this._animationSpritesCA.push(sprite);
             $gameTemp.resetUsingCA();
@@ -180,7 +181,8 @@
     const _Spriteset_Base_updateAnimations = Spriteset_Base.prototype.updateAnimations;
     Spriteset_Base.prototype.updateAnimations = function() {
         for (const sprite of this._animationSpritesCA) {
-            if (!sprite.isPlaying() || !sprite.targetObjects[0].isChanting()) {
+            const target = sprite.targetObjects[0];
+            if (!sprite.isPlaying() || !target.isChanting()) {
                 this.removeAnimationCA(sprite);
             }
         }
@@ -188,23 +190,17 @@
     };
 
     Spriteset_Base.prototype.removeAnimationCA = function(sprite) {
+        const target = sprite.targetObjects[0];
         this._animationSpritesCA.remove(sprite);
         this._effectsContainer.removeChild(sprite);
-        for (const target of sprite.targetObjects) {
-            if (target.endAnimationCA) {
-                target.endAnimationCA();
-            }
-        }
+        target.endAnimationCA();
         sprite.destroy();
     };
 
-    const _Spriteset_Base_isAnimationPlaying = Spriteset_Base.prototype.isAnimationPlaying;
-    Spriteset_Base.prototype.isAnimationPlaying = function() {
-        subject = BattleManager._subject;
-        return(
-            this._animationSpritesCA.length > 0 && !subject ? false :
-            _Spriteset_Base_isAnimationPlaying.call(this)
-        );
+    const _BattleManager_startAction = BattleManager.startAction;
+    BattleManager.startAction = function() {
+        _BattleManager_startAction.call(this);
+        this._subject.endAnimationCA();
     };
 
 })();
