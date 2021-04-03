@@ -8,6 +8,7 @@
 // 1.0.0 初版
 // 1.0.1 一部シーンでスキル速度補正が＋でもアニメーション再生される不具合を修正
 // 1.0.2 詠唱アニメーションが一定ターン経過以降に一切発動しなくなる不具合を修正
+// 1.0.3 v1.0.2(アニメーション発動不具合)の追加修正
 // =================================================================
 /*:ja
  * @target MZ
@@ -109,6 +110,8 @@
             if (id > 0 && speed < 0 && !battler.animationPlayingCA()) {
                 $gameTemp.requestAnimationCA(battler, id);
             }
+        } else if (battler.isWaiting()) {
+            battler.endAnimationCA();
         }
     };
 
