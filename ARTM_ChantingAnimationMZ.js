@@ -9,6 +9,7 @@
 // 1.0.1 一部シーンでスキル速度補正が＋でもアニメーション再生される不具合を修正
 // 1.0.2 詠唱アニメーションが一定ターン経過以降に一切発動しなくなる不具合を修正
 // 1.0.3 v1.0.2(アニメーション発動不具合)の追加修正
+// 1.1.0 魔法以外のスキルタイプにも対応
 // =================================================================
 /*:ja
  * @target MZ
@@ -49,9 +50,10 @@
     // function
     //
     function getCantAnimationId(battler) {
-        const item = battler.action(0)._item;
+        const action = battler.action(0);
+        const item = action ? action._item : null;
         const emptyId = -1;
-        if (item.isSkill()) {
+        if (item && item.isSkill()) {
             return item.object().meta.CA_ANIM_ID || emptyId;
         } else {
             return emptyId;
@@ -104,9 +106,11 @@
     // Sprite_Battler
     //
     Sprite_Battler.prototype.updateChantingAnimation = function(battler) {
-        if (battler.isChanting() && battler._tpbState !== "acting") {
+        if (battler._tpbState === "casting") {
             const id = getCantAnimationId(battler);
-            const speed = battler._actions[0].item().speed;
+            const action = battler._actions[0];
+            const item = action ? action.item() : null;
+            const speed = item ? item.speed : 0;
             if (id > 0 && speed < 0 && !battler.animationPlayingCA()) {
                 $gameTemp.requestAnimationCA(battler, id);
             }
@@ -185,7 +189,7 @@
     Spriteset_Base.prototype.updateAnimations = function() {
         for (const sprite of this._animationSpritesCA) {
             const target = sprite.targetObjects[0];
-            if (!sprite.isPlaying() || !target.isChanting()) {
+            if (!sprite.isPlaying() || target._tpbState !== "casting") {
                 this.removeAnimationCA(sprite);
             }
         }
