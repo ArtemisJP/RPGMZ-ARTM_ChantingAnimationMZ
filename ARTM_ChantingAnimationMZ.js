@@ -3,14 +3,15 @@
 // Copyright (c) 2021 Artemis
 // This software is released under the MIT license.
 // http://opensource.org/licenses/mit-license.php
-// ===================================================
+// =============================================================================
 // [Version]
 // 1.0.0 初版
 // 1.0.1 一部シーンでスキル速度補正が＋でもアニメーション再生される不具合を修正
 // 1.0.2 詠唱アニメーションが一定ターン経過以降に一切発動しなくなる不具合を修正
 // 1.0.3 v1.0.2(アニメーション発動不具合)の追加修正
 // 1.1.0 魔法以外のスキルタイプにも対応
-// =================================================================
+// 1.1.1 稀に詠唱アニメーションが別詠唱者によってかき消されてしまう不具合を修正
+// =============================================================================
 /*:ja
  * @target MZ
  * @plugindesc 詠唱中アニメーションを追加するMZ専用プラグイン
@@ -63,20 +64,23 @@
     //-----------------------------------------------------------------------------
     // Game_Temp
     //
-    Game_Temp.prototype.requestAnimationCA = function(target, animationId)
-    {
+    const _Game_Temp_initialize = Game_Temp.prototype.initialize;
+    Game_Temp.prototype.initialize = function() {
+        _Game_Temp_initialize.call(this);
+        this._isUsingCA = true;
+    };
+
+    Game_Temp.prototype.requestAnimationCA = function(target, animationId) {
         target.startAnimationCA();
         Game_Temp.prototype.requestAnimation.call(this, [target], animationId);
         this._isUsingCA = true;
     };
 
-    Game_Temp.prototype.resetUsingCA = function()
-    {
+    Game_Temp.prototype.initUsingCA = function() {
         this._isUsingCA = false;
     };
 
-    Game_Temp.prototype.isUsingCA = function()
-    {
+    Game_Temp.prototype.isUsingCA = function() {
         return this._isUsingCA;
     };
 
@@ -86,8 +90,9 @@
     const _Game_BattlerBase_initMembers = Game_BattlerBase.prototype.initMembers;
     Game_BattlerBase.prototype.initMembers = function() {
         _Game_BattlerBase_initMembers.call(this);
-        this._isUsingCA = false;
         this._animationPlayingCA = false;
+        this._animationErrCountCA = 0;
+        this._anmPitch = 0;
     };
 
     Game_BattlerBase.prototype.animationPlayingCA = function() {
@@ -102,6 +107,14 @@
         this._animationPlayingCA = false;
     };
 
+    Game_BattlerBase.prototype.nextAnimErrCountCA = function() {
+        return ++this._animationErrCountCA;
+    };
+
+    Game_BattlerBase.prototype.initAnmErrCountCA = function() {
+        this._animationErrCountCA = 0;
+    };
+
     //-----------------------------------------------------------------------------
     // Sprite_Battler
     //
@@ -113,7 +126,10 @@
             const speed = item ? item.speed : 0;
             if (id > 0 && speed < 0 && !battler.animationPlayingCA()) {
                 $gameTemp.requestAnimationCA(battler, id);
-            }
+                battler.initAnmErrCountCA();
+            } else if (battler.nextAnimErrCountCA() > battler._anmPitch) {
+                battler.initAnmErrCountCA();
+            };
         } else if (battler.isWaiting()) {
             battler.endAnimationCA();
         }
@@ -151,7 +167,6 @@
         Sprite_Animation.prototype.initialize.call(this);
     };
 
-
     //-----------------------------------------------------------------------------
     // Spriteset_Base
     //
@@ -162,27 +177,30 @@
     };
 
     const _Spriteset_Base_createAnimationSprite = Spriteset_Base.prototype.createAnimationSprite;
-    Spriteset_Base.prototype.createAnimationSprite = function(
-        targets, animation, mirror, delay
-    ) {
-        const target = targets[0];
-        if ($gameTemp.isUsingCA() && target.animationPlayingCA()) {
-            const sprite = new Sprite_AnimationCA();
-            const targetSprites = this.makeTargetSprites(targets);
-            const baseDelay = this.animationBaseDelay();
-            const previous = delay > baseDelay ? this.lastAnimationSprite() : null;
-            if (this.animationShouldMirror(target)) {
-                mirror = !mirror;
-            }
-            sprite.targetObjects = targets;
-            sprite.setup(targetSprites, animation, mirror, delay, previous);
-            sprite._animation.displayType = -1;
-            this._effectsContainer.addChild(sprite);
-            this._animationSpritesCA.push(sprite);
-            $gameTemp.resetUsingCA();
-            return;
+    Spriteset_Base.prototype.createAnimationSprite = function(targets, animation, mirror, delay) {
+       if ($gameTemp.isUsingCA() && targets[0].animationPlayingCA()) {
+           this.createAnimationSpriteCA(...arguments);
+           return;
+       }
+       _Spriteset_Base_createAnimationSprite.call(this, ...arguments);
+    };
+
+    Spriteset_Base.prototype.createAnimationSpriteCA = function(targets, animation, mirror, delay) {
+        const sprite = new Sprite_AnimationCA();
+        const targetSprites = this.makeTargetSprites(targets);
+        const baseDelay = this.animationBaseDelay();
+        const previous = delay > baseDelay ? this.lastAnimationSprite() : null;
+        if (this.animationShouldMirror(targets[0])) {
+            mirror = !mirror;
         }
-        _Spriteset_Base_createAnimationSprite.call(this, targets, animation, mirror, delay);
+        sprite.targetObjects = targets;
+        sprite.setup(targetSprites, animation, mirror, delay, previous);
+        sprite._animation.displayType = -1;
+        targets[0]._anmPitch = parseInt(120 / (sprite._animation.speed / 100)) * 1.5;
+        this._effectsContainer.addChild(sprite);
+        this._animationSpritesCA.push(sprite);
+        $gameTemp.initUsingCA();
+        return;
     };
 
     const _Spriteset_Base_updateAnimations = Spriteset_Base.prototype.updateAnimations;
