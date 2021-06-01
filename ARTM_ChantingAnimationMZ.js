@@ -8,8 +8,8 @@
 // 1.0.0 初版
 // 1.0.x 軽微な不具合修正
 // 1.1.0 魔法以外のスキルタイプにも対応
-// 1.1.1 稀に詠唱アニメーションが別詠唱者によってかき消されてしまう不具合を修正
-// 1.1.2 v1.1.1の追加修正
+// 1.1.x 稀に詠唱アニメーションが別詠唱者によってかき消されてしまう不具合を修正
+// 1.2.0 拙作プラグイン「ARTM_EnemyAsActorSpriteMZ」に対応
 // =============================================================================
 /*:ja
  * @target MZ
@@ -120,7 +120,7 @@
     Sprite_Battler.prototype.updateChantingAnimation = function(battler) {
         if (battler._tpbState === "casting") {
             const id = getCantAnimationId(battler);
-            const action = battler._actions[0];
+            const action = battler.action(0);
             const item = action ? action.item() : null;
             const speed = item ? item.speed : 0;
             if (id > 0 && speed < 0 && !battler.animationPlayingCA()) {
@@ -141,7 +141,9 @@
     const _Sprite_Actor_updateMotion = Sprite_Actor.prototype.updateMotion;
     Sprite_Actor.prototype.updateMotion = function() {
         _Sprite_Actor_updateMotion.call(this);
-        this.updateChantingAnimation(this._actor);
+        if (!["battleEnd", ""].includes(BattleManager._phase)) {
+            this.updateChantingAnimation(this._actor);
+        }
     };
 
     //-----------------------------------------------------------------------------
@@ -150,7 +152,9 @@
     const _Sprite_Enemy_updateEffect = Sprite_Enemy.prototype.updateEffect;
     Sprite_Enemy.prototype.updateEffect = function() {
         _Sprite_Enemy_updateEffect.call(this);
-        this.updateChantingAnimation(this._enemy);
+        if (!this._enemy._asEnemy) {
+            this.updateChantingAnimation(this._enemy);
+        }
     };
 
     //-----------------------------------------------------------------------------
