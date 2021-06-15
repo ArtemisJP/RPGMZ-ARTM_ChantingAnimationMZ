@@ -10,6 +10,7 @@
 // 1.1.0 魔法以外のスキルタイプにも対応
 // 1.1.x 稀に詠唱アニメーションが別詠唱者によってかき消されてしまう不具合を修正
 // 1.2.0 拙作プラグイン「ARTM_EnemyAsActorSpriteMZ」に対応
+// 1.2.1 詠唱アニメーションの初期化不備を修正
 // =============================================================================
 /*:ja
  * @target MZ
@@ -66,7 +67,7 @@
     const _Game_Temp_initialize = Game_Temp.prototype.initialize;
     Game_Temp.prototype.initialize = function() {
         _Game_Temp_initialize.call(this);
-        this._isUsingCA = true;
+        this._isUsingCA = false;
     };
 
     Game_Temp.prototype.requestAnimationCA = function(target, animationId) {
