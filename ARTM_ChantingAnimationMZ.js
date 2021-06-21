@@ -11,7 +11,7 @@
 // 1.1.x 稀に詠唱アニメーションが別詠唱者によってかき消されてしまう不具合を修正
 // 1.2.0 拙作プラグイン「ARTM_EnemyAsActorSpriteMZ」に対応
 // 1.2.1 詠唱アニメーションの初期化不備を修正
-// 1.2.2 勝利時に詠唱アニメーションを強制停止するよう修正
+// 1.2.2 勝利時に詠唱アニメーションを強制停止するよう修正、リファクタリングを実施
 // =============================================================================
 /*:ja
  * @target MZ
@@ -68,21 +68,23 @@
     const _Game_Temp_initialize = Game_Temp.prototype.initialize;
     Game_Temp.prototype.initialize = function() {
         _Game_Temp_initialize.call(this);
-        this._isUsingCA = false;
+        this._animationQueueCA = [];
     };
 
     Game_Temp.prototype.requestAnimationCA = function(target, animationId) {
-        target.startAnimationCA();
-        Game_Temp.prototype.requestAnimation.call(this, [target], animationId);
-        this._isUsingCA = true;
+        if ($dataAnimations[animationId]) {
+            const request = {
+                targets: [target],
+                animationId: animationId,
+                mirror: false
+            };
+            this._animationQueueCA.push(request);
+            target.startAnimationCA();
+        }
     };
 
-    Game_Temp.prototype.initUsingCA = function() {
-        this._isUsingCA = false;
-    };
-
-    Game_Temp.prototype.isUsingCA = function() {
-        return this._isUsingCA;
+    Game_Temp.prototype.retrieveAnimationCA = function() {
+        return this._animationQueueCA.shift();
     };
 
     //-----------------------------------------------------------------------------
@@ -184,14 +186,18 @@
         this._animationSpritesCA = [];
     };
 
-    const _Spriteset_Base_createAnimationSprite = Spriteset_Base.prototype.createAnimationSprite;
-    Spriteset_Base.prototype.createAnimationSprite = function(targets, animation, mirror, delay) {
-       if (!$gameTemp.isUsingCA()) {
-           _Spriteset_Base_createAnimationSprite.call(this, ...arguments);
-       }
-       if (targets[0].animationPlayingCA() && $gameTemp.isUsingCA()) {
-           this.createAnimationSpriteCA(...arguments);
-       }
+    Spriteset_Base.prototype.createAnimationCA = function(request) {
+        const animation = $dataAnimations[request.animationId];
+        const targets = request.targets;
+        const mirror = request.mirror;
+        let delay = this.animationBaseDelay();
+        const nextDelay = this.animationNextDelay();
+        if (this.isAnimationForEach(animation)) {
+            this.createAnimationSpriteCA(targets, animation, mirror, delay);
+            delay += nextDelay;
+        } else {
+            this.createAnimationSpriteCA(targets, animation, mirror, delay);
+        }
     };
 
     Spriteset_Base.prototype.createAnimationSpriteCA = function(targets, animation, mirror, delay) {
@@ -208,12 +214,11 @@
         targets[0]._anmPitch = parseInt(120 / (sprite._animation.speed / 100)) * 1.5;
         this._effectsContainer.addChild(sprite);
         this._animationSpritesCA.push(sprite);
-        $gameTemp.initUsingCA();
-        return;
     };
 
     const _Spriteset_Base_updateAnimations = Spriteset_Base.prototype.updateAnimations;
     Spriteset_Base.prototype.updateAnimations = function() {
+        _Spriteset_Base_updateAnimations.call(this);
         for (const sprite of this._animationSpritesCA) {
             const target = sprite.targetObjects[0];
             if (!sprite.isPlaying() || target._tpbState !== "casting") {
@@ -222,8 +227,20 @@
                 this.removeAnimationCA(sprite);           
             }
         }
-        _Spriteset_Base_updateAnimations.call(this);
+        this.processAnimationRequestsCA();
     };
+
+    Spriteset_Base.prototype.processAnimationRequestsCA = function() {
+        for (;;) {
+            const request = $gameTemp.retrieveAnimationCA();
+            if (request) {
+                this.createAnimationCA(request);
+            } else {
+                break;
+            }
+        }
+    };
+
 
     Spriteset_Base.prototype.removeAnimationCA = function(sprite) {
         const target = sprite.targetObjects[0];
