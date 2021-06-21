@@ -11,6 +11,7 @@
 // 1.1.x 稀に詠唱アニメーションが別詠唱者によってかき消されてしまう不具合を修正
 // 1.2.0 拙作プラグイン「ARTM_EnemyAsActorSpriteMZ」に対応
 // 1.2.1 詠唱アニメーションの初期化不備を修正
+// 1.2.2 勝利時に詠唱アニメーションを強制停止するよう修正
 // =============================================================================
 /*:ja
  * @target MZ
@@ -124,7 +125,9 @@
             const action = battler.action(0);
             const item = action ? action.item() : null;
             const speed = item ? item.speed : 0;
-            if (id > 0 && speed < 0 && !battler.animationPlayingCA()) {
+            if (id < 0 ) {
+                return;
+            } else if (id > 0 && speed < 0 && !battler.animationPlayingCA()) {
                 $gameTemp.requestAnimationCA(battler, id);
                 battler.initAnmErrCountCA();
             } else if (battler.nextAnimErrCountCA() > battler._anmPitch) {
@@ -183,11 +186,12 @@
 
     const _Spriteset_Base_createAnimationSprite = Spriteset_Base.prototype.createAnimationSprite;
     Spriteset_Base.prototype.createAnimationSprite = function(targets, animation, mirror, delay) {
-       if ($gameTemp.isUsingCA() && targets[0].animationPlayingCA()) {
-           this.createAnimationSpriteCA(...arguments);
-           return;
+       if (!$gameTemp.isUsingCA()) {
+           _Spriteset_Base_createAnimationSprite.call(this, ...arguments);
        }
-       _Spriteset_Base_createAnimationSprite.call(this, ...arguments);
+       if (targets[0].animationPlayingCA() && $gameTemp.isUsingCA()) {
+           this.createAnimationSpriteCA(...arguments);
+       }
     };
 
     Spriteset_Base.prototype.createAnimationSpriteCA = function(targets, animation, mirror, delay) {
@@ -214,6 +218,8 @@
             const target = sprite.targetObjects[0];
             if (!sprite.isPlaying() || target._tpbState !== "casting") {
                 this.removeAnimationCA(sprite);
+            } else if (["battleEnd", ""].includes(BattleManager._phase)) {
+                this.removeAnimationCA(sprite);           
             }
         }
         _Spriteset_Base_updateAnimations.call(this);
