@@ -6,15 +6,12 @@
 // =============================================================================
 // [Version]
 // 1.0.0 初版
-// 1.0.x 軽微な不具合修正
 // 1.1.0 魔法以外のスキルタイプにも対応
-// 1.1.x 稀に詠唱アニメーションが別詠唱者によってかき消されてしまう不具合を修正
 // 1.2.0 拙作プラグイン「ARTM_EnemyAsActorSpriteMZ」に対応
-// 1.2.1 詠唱アニメーションの初期化不備を修正
-// 1.2.2 勝利時に詠唱アニメーションを強制停止するよう修正
 // 1.3.0 アクションフェーズ時の詠唱アニメーション継続ON/OFFを追加
 //       詠唱完了後もアニメーションのフラッシュ色が残り続ける不具合を解消
 // 1.3.1 詠唱アニメーション継続OFF設定時、イベント発生中も中断するよう対応
+//       リファクタリングを実施
 // =============================================================================
 /*:ja
  * @target MZ
@@ -142,22 +139,25 @@
     //-----------------------------------------------------------------------------
     // Sprite_Battler
     //
-    Sprite_Battler.prototype.updateAnimationCA = function(battler) {
+    Sprite_Battler.prototype.updateAnimationCA = function() {
+        const battler = this._battler;
         if (battler._tpbState === "casting" &&
             BattleManager.isKeeponAnimationCA()) {
              const animeId = getCantAnimationId(battler);
              if (animeId > 0) {
-                 this.requestAnimationCA(battler, animeId);
+                 this.requestAnimationCA(animeId);
              } else {
                  return;
              }
         }
     };
 
-    Sprite_Battler.prototype.requestAnimationCA = function(battler, animeId) {
-        const action = battler.action(0);
-        const item = action ? action.item() : null;
-        const speed = item ? item.speed : 0;
+    Sprite_Battler.prototype.requestAnimationCA = function(animeId) {
+        const battler = this._battler;
+        let speed = 0;
+        if (battler.action(0)) {
+            speed = battler.action(0).item().speed;
+        }
         if (speed < 0 && !battler.animationPlayingCA()) {
             $gameTemp.requestAnimationCA(this, battler, animeId);
             battler.initAnmErrCountCA();
@@ -173,7 +173,7 @@
     const _Sprite_Actor_updateMotion = Sprite_Actor.prototype.updateMotion;
     Sprite_Actor.prototype.updateMotion = function() {
         _Sprite_Actor_updateMotion.call(this);
-        this.updateAnimationCA(this._actor);
+        this.updateAnimationCA();
     };
 
     //-----------------------------------------------------------------------------
@@ -183,7 +183,7 @@
     Sprite_Enemy.prototype.updateEffect = function() {
         _Sprite_Enemy_updateEffect.call(this);
         if (!this._enemy._asEnemy) {
-            this.updateAnimationCA(this._enemy);
+            this.updateAnimationCA();
         }
     };
 
